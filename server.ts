@@ -577,7 +577,7 @@ async function startServer() {
     // 2. Verify yt-dlp availability
     const localYtDlp = path.join(process.cwd(), 'yt-dlp');
     
-    const isInstalled = ensureYtDlpInstalled(localYtDlp);
+    const isInstalled = fs.existsSync(localYtDlp);
     
     const ytDlpCmd = isInstalled ? localYtDlp : 'yt-dlp';
     const ytExe = isInstalled ? 'python3' : 'yt-dlp';
@@ -1651,7 +1651,7 @@ Return ONLY a JSON object that matches this schema:
     
     // Resolve yt-dlp executable path
     const localYtDlp = path.join(process.cwd(), 'yt-dlp');
-    const isInstalled = ensureYtDlpInstalled(localYtDlp);
+    const isInstalled = fs.existsSync(localYtDlp);
     
     const ytDlpCmd = isInstalled ? localYtDlp : 'yt-dlp';
     const ytExe = isInstalled ? 'python3' : 'yt-dlp';
