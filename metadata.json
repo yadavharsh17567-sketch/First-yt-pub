@@ -1,0 +1,6 @@
+{
+  "name": "YouTube Auto Republisher",
+  "description": "An automated web application that manages, schedules, and republishes videos to YouTube channels with auto-downloading, queuing, retries, and detailed event logging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

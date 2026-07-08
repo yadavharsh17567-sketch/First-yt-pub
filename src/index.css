@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+}
+
+/* Glassmorphism utility classes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+  outline: none;
+}
+
+/* Custom background animation */
+@keyframes pulse-slow {
+  0%, 100% {
+    transform: scale(1) translate(0px, 0px);
+    opacity: 0.4;
+  }
+  33% {
+    transform: scale(1.1) translate(30px, -50px);
+    opacity: 0.6;
+  }
+  66% {
+    transform: scale(0.95) translate(-20px, 20px);
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-slow-1 {
+  animation: pulse-slow 15s infinite ease-in-out;
+}
+
+.animate-pulse-slow-2 {
+  animation: pulse-slow 18s infinite ease-in-out reverse;
+}
