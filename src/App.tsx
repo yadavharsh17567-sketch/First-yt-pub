@@ -14,6 +14,7 @@ import Sidebar from './components/Sidebar';
 import MetricCards from './components/MetricCards';
 import RocketIdle from './components/RocketIdle';
 import PipelineHealth from './components/PipelineHealth';
+import AuthScreen from './components/AuthScreen';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'queue' | 'scheduler' | 'logs' | 'settings'>('dashboard');
@@ -97,6 +98,11 @@ export default function App() {
   // Copy helper
   const [copied, setCopied] = useState<boolean>(false);
 
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [loginId, setLoginId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
   // Notification helper
   const showNotification = (type: 'success' | 'error' | 'info', message: string) => {
     setNotification({ type, message });
@@ -105,12 +111,45 @@ export default function App() {
     }, 4500);
   };
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsActionLoading(true);
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: loginId, password: loginPassword })
+      });
+      if (res.ok) {
+        setIsAuthenticated(true);
+        fetchState(true);
+      } else {
+        showNotification('error', 'Invalid ID or Password');
+      }
+    } catch (err) {
+      showNotification('error', 'Login request failed');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    setIsAuthenticated(false);
+  };
+
   // Fetch complete application state from backend
   const fetchState = async (showLoader = false) => {
     if (showLoader) setIsLoading(true);
     try {
       const res = await fetch('/api/state');
+      if (res.status === 401) {
+        setIsAuthenticated(false);
+        if (showLoader) setIsLoading(false);
+        return;
+      }
       if (res.ok) {
+        setIsAuthenticated(true);
         const data = await res.json();
         setUsers(data.users || []);
         setVideos(data.videos || []);
@@ -607,6 +646,21 @@ export default function App() {
     return matchesSearch && matchesLevel;
   });
 
+  if (!isAuthenticated && !isLoading) {
+    return (
+      <AuthScreen 
+        loginId={loginId}
+        setLoginId={setLoginId}
+        loginPassword={loginPassword}
+        setLoginPassword={setLoginPassword}
+        handleLogin={handleLogin}
+        notification={notification}
+        setNotification={setNotification}
+        isActionLoading={isActionLoading}
+      />
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-[#050508] font-sans antialiased flex text-white selection:bg-white/20 overflow-x-hidden">
       
@@ -767,6 +821,13 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 sm:px-4.5 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-xs font-semibold transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
             <button 
               onClick={handleLinkChannel}
               disabled={isActionLoading}

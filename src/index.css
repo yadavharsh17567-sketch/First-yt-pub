@@ -60,3 +60,9 @@
 .animate-pulse-slow-2 {
   animation: pulse-slow 18s infinite ease-in-out reverse;
 }
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}

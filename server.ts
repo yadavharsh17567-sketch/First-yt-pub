@@ -542,6 +542,45 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
+  // Auth Endpoints
+  app.post('/api/login', (req, res) => {
+    const { id, password } = req.body;
+    if (id === 'Harsh' && password === '7304') {
+      res.cookie('auth_token', 'master_token_123', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000
+      });
+      return res.json({ success: true });
+    }
+    return res.status(401).json({ error: 'Invalid credentials' });
+  });
+
+  app.post('/api/logout', (req, res) => {
+    res.clearCookie('auth_token');
+    res.json({ success: true });
+  });
+
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/login' || req.path === '/logout' || req.path === '/health') {
+      return next();
+    }
+    const cookieHeader = req.headers.cookie || '';
+    const cookies: Record<string, string> = {};
+    cookieHeader.split(';').forEach(cookie => {
+      const parts = cookie.split('=');
+      if (parts.length >= 2) {
+        cookies[parts[0].trim()] = parts[1].trim();
+      }
+    });
+    
+    if (cookies['auth_token'] === 'master_token_123') {
+      return next();
+    }
+    return res.status(401).json({ error: 'Unauthorized' });
+  });
+
   const THUMBNAILS_DIR = path.join(process.cwd(), 'downloads', 'thumbnails');
   app.use('/seo_thumbnails', express.static(THUMBNAILS_DIR));
 
