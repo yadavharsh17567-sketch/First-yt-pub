@@ -1003,6 +1003,152 @@ New Shorts uploaded regularly—stay tuned!
     }
   });
 
+  // API: AI Diagnostics & Troubleshooter
+  app.post('/api/videos/ai-diagnose', async (req, res) => {
+    const state = readDb();
+    const { videoId } = req.body;
+
+    const v = state.videos.find(x => x.id === videoId);
+    if (!v) {
+      return res.status(404).json({ error: 'Video not found.' });
+    }
+
+    const errorMsg = v.error || 'No error details recorded. The system indicates a generic pipeline disruption.';
+    const sourceUrl = v.sourceUrl || '';
+
+    // Step 1: Detect if we have Gemini configured, use it for customized smart troubleshooting
+    const apiKey = state.settings.geminiApiKey || process.env.GEMINI_API_KEY;
+    let diagnosisResult = null;
+
+    if (apiKey) {
+      try {
+        const ai = new GoogleGenAI({ 
+          apiKey,
+          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+        });
+
+        const prompt = `You are an expert AI system diagnostic agent for a YouTube video replication/download server running yt-dlp.
+We encountered a download error for the following video:
+Video URL: ${sourceUrl}
+Raw Error Log:
+${errorMsg}
+
+Analyze this raw error and categorize it into one of these types:
+- "Rate Limit / IP Block" (for HTTP 403 Forbidden, Sign-in required, or bot verification blocks)
+- "Invalid URL" (unsupported url, bad video id)
+- "Private Video" (deleted, private, or age-restricted)
+- "Generic Error" (any other network or internal error)
+
+Provide:
+1. A clear, friendly explanation of why this error happened.
+2. A list of actionable, clear, step-by-step instructions of how the user can fix it (e.g. if it's an IP block, explain how they can copy cookies from their browser or use a different public/mock video).
+3. Set the 'canSolveByCookies' boolean flag to true if pasting cookies or PO Token will bypass this.
+4. Set the 'canSolveByMock' boolean flag to true if this is for testing and they should use watch?v=mock_video.
+
+Return ONLY a JSON object that matches this schema:
+{
+  "errorType": "Rate Limit / IP Block" | "Invalid URL" | "Private Video" | "Generic Error",
+  "explanation": "text",
+  "solution": "text",
+  "steps": ["step 1", "step 2", "step 3"],
+  "canSolveByCookies": true,
+  "canSolveByMock": true
+}`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                errorType: { type: Type.STRING },
+                explanation: { type: Type.STRING },
+                solution: { type: Type.STRING },
+                steps: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                },
+                canSolveByCookies: { type: Type.BOOLEAN },
+                canSolveByMock: { type: Type.BOOLEAN }
+              },
+              required: ["errorType", "explanation", "solution", "steps", "canSolveByCookies", "canSolveByMock"]
+            }
+          }
+        });
+
+        if (response.text) {
+          diagnosisResult = JSON.parse(response.text.trim());
+        }
+      } catch (err) {
+        console.error('[AI Diagnostics] Gemini diagnostic generation failed, falling back to local diagnostics rules:', err);
+      }
+    }
+
+    // Step 2: Fallback to local rule-based diagnostics if Gemini is offline or not configured
+    if (!diagnosisResult) {
+      const errLower = errorMsg.toLowerCase();
+      if (errLower.includes('403') || errLower.includes('forbidden') || errLower.includes('sign in') || errLower.includes('confirm you are not a bot') || errLower.includes('rate limit') || errLower.includes('too many requests')) {
+        diagnosisResult = {
+          errorType: 'Rate Limit / IP Block',
+          explanation: 'YouTube has detected that this cloud server is automated and has temporarily blocked or rate-limited our server\'s IP address. This is a very common defense mechanism by YouTube against public hosting environments.',
+          solution: 'To bypass this, you need to provide your personal YouTube session cookies or configured PO Token credentials in the settings panel so the server can authenticates request as a real browser.',
+          steps: [
+            'Install a browser extension like "Get cookies.txt" in Chrome or Firefox.',
+            'Navigate to YouTube while signed into your account and export your cookies in Netscape format.',
+            'Open the Settings tab in this app, scroll down to YouTube Session Credentials, and paste the cookies text.',
+            'Click "Save Settings" and force-retry the download pipeline!'
+          ],
+          canSolveByCookies: true,
+          canSolveByMock: true
+        };
+      } else if (errLower.includes('unsupported url') || errLower.includes('invalid') || errLower.includes('regex') || (!sourceUrl.includes('youtube.com') && !sourceUrl.includes('youtu.be'))) {
+        diagnosisResult = {
+          errorType: 'Invalid URL',
+          explanation: 'The source URL provided does not seem to be a valid or supported YouTube video. yt-dlp is unable to locate any stream content for this address.',
+          solution: 'Please verify the URL format. Make sure it is a valid public YouTube watch link, short link, or shorts link.',
+          steps: [
+            'Copy the URL directly from your web browser address bar.',
+            'Ensure the URL looks like: https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID.',
+            'Test downloading the video using the "Mock Video Generator" by entering "watch?v=mock_video" as the URL to test full end-to-end features without real downloads.'
+          ],
+          canSolveByCookies: false,
+          canSolveByMock: true
+        };
+      } else if (errLower.includes('private') || errLower.includes('deleted') || errLower.includes('removed') || errLower.includes('age restricted') || errLower.includes('sign-in required')) {
+        diagnosisResult = {
+          errorType: 'Private / Restricted Video',
+          explanation: 'The video is private, deleted, or restricted by YouTube (such as age restrictions or geo-blocking).',
+          solution: 'Make sure the video is public and viewable without restrictions. If it is restricted, providing authenticated YouTube cookies in settings might bypass it.',
+          steps: [
+            'Open the YouTube link in an incognito window to verify if it is publicly viewable.',
+            'If it is age-restricted or member-only, export your authenticated cookies and paste them in the Settings tab.',
+            'Alternatively, replace it with a public video link.'
+          ],
+          canSolveByCookies: true,
+          canSolveByMock: false
+        };
+      } else {
+        diagnosisResult = {
+          errorType: 'System Pipeline Issue',
+          explanation: `An unexpected issue was encountered during the yt-dlp download execution stream. Raw response: "${errorMsg.slice(0, 150)}..."`,
+          solution: 'This might be a temporary network hiccup or a glitch in the downloader utility executable.',
+          steps: [
+            'Click the "Force Retry" button on the video card to queue the pipeline again.',
+            'Check the Audit Logs tab to see full network debugging streams.',
+            'Ensure the server settings are saved properly.'
+          ],
+          canSolveByCookies: false,
+          canSolveByMock: true
+        };
+      }
+    }
+
+    addLog('info', `AI diagnostics completed for video "${v.title}". Result: ${diagnosisResult.errorType}`);
+    res.json({ success: true, diagnosis: diagnosisResult });
+  });
+
   // API: Manual Optimize SEO and Generate Best Thumbnail with Click Prediction
   app.post('/api/videos/optimize-seo', async (req, res) => {
     const state = readDb();

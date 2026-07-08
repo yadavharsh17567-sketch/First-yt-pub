@@ -68,6 +68,20 @@ export default function App() {
   const [triggeringRuleId, setTriggeringRuleId] = useState<string | null>(null);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
 
+  // AI Diagnostic States
+  const [diagnosingVideoId, setDiagnosingVideoId] = useState<string | null>(null);
+  const [isDiagnosing, setIsDiagnosing] = useState<boolean>(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<{
+    errorType: string;
+    explanation: string;
+    solution: string;
+    steps: string[];
+    canSolveByCookies: boolean;
+    canSolveByMock: boolean;
+  } | null>(null);
+  const [diagnosticError, setDiagnosticError] = useState<string | null>(null);
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState<boolean>(false);
+
   // Settings form editing state
   const [editClientId, setEditClientId] = useState<string>('');
   const [editClientSecret, setEditClientSecret] = useState<string>('');
@@ -317,6 +331,31 @@ export default function App() {
       }
     } catch (e) {
       showNotification('error', 'Failed to retry video.');
+    }
+  };
+
+  const handleDiagnoseVideo = async (videoId: string) => {
+    setDiagnosingVideoId(videoId);
+    setIsDiagnosing(true);
+    setDiagnosticResult(null);
+    setDiagnosticError(null);
+    setShowDiagnosticModal(true);
+    try {
+      const res = await fetch('/api/videos/ai-diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDiagnosticResult(data.diagnosis);
+      } else {
+        setDiagnosticError(data.error || 'Failed to generate diagnostics. Please try again.');
+      }
+    } catch (e) {
+      setDiagnosticError('Network error connecting to AI Troubleshooter.');
+    } finally {
+      setIsDiagnosing(false);
     }
   };
 
@@ -1316,6 +1355,14 @@ export default function App() {
                                   <p className="text-3xs text-red-400 truncate font-mono" title={video.error}>{video.error || 'System error'}</p>
                                 </div>
                                 <button 
+                                  onClick={() => handleDiagnoseVideo(video.id)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 hover:bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center gap-1.5 transition active:scale-95"
+                                  title="AI Smart Diagnostics & Troubleshooter"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                                  <span className="hidden xs:inline">AI Troubleshoot</span>
+                                </button>
+                                <button 
                                   onClick={() => handleRetryVideo(video.id)}
                                   className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/25 hover:bg-blue-500/20 text-blue-400 transition"
                                   title="Force Retry Pipeline"
@@ -1445,7 +1492,7 @@ export default function App() {
                                 </div>
                                 <div>
                                   <label className="block text-3xs font-mono text-white/40 uppercase tracking-wider mb-1">Max Videos (1-15)</label>
-                                  <input type="number" required min={1} max={15} value={ruleMaxLatestVideos} onChange={e => setRuleMaxLatestVideos(Math.min(15, Math.max(1, Number(e.target.value))))} className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white" />
+                                  <input type="number" required min={1} max={15} value={ruleMaxLatestVideos || ''} onChange={e => setRuleMaxLatestVideos(Number(e.target.value))} className="w-full glass-input rounded-xl px-3 py-2.5 text-sm text-white" />
                                 </div>
                               </div>
                               <div>
@@ -1939,6 +1986,161 @@ export default function App() {
         <footer className="mt-12 py-6 border-t border-white/10 text-center text-3xs text-white/30 font-mono tracking-wider">
           <p>© 2026 YOUTUBE AUTO REPUBLISHER SYSTEM INC. • ALL RIGHTS RESERVED • SECURED FOR AUTHORIZED CHANNELS ONLY</p>
         </footer>
+
+        {/* AI Diagnostics & Troubleshooter Modal */}
+        <AnimatePresence>
+          {showDiagnosticModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              {/* Backdrop */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowDiagnosticModal(false)}
+                className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+              />
+
+              {/* Modal Content */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-2xl bg-slate-900 border border-white/10 rounded-3xl overflow-hidden shadow-2xl z-10 font-sans text-white"
+              >
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-white/5 bg-slate-950/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <Sparkles className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="text-md font-bold text-white">AI Diagnostics & Troubleshooter</h3>
+                      <p className="text-3xs font-mono text-purple-400 uppercase tracking-wider">Powered by Gemini AI Engine</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowDiagnosticModal(false)}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+                  {isDiagnosing ? (
+                    <div className="py-12 flex flex-col items-center justify-center text-center">
+                      <Loader2 className="w-10 h-10 text-purple-500 animate-spin mb-4" />
+                      <h4 className="text-sm font-semibold text-white/90">Analyzing Raw Downloader Logs</h4>
+                      <p className="text-xs text-white/40 max-w-xs mt-1 leading-relaxed">
+                        Gemini is inspecting the yt-dlp call stack trace, diagnosing IP rate-limits, and planning a self-healing strategy...
+                      </p>
+                    </div>
+                  ) : diagnosticError ? (
+                    <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10 text-center space-y-3">
+                      <AlertCircle className="w-8 h-8 text-red-400 mx-auto" />
+                      <h4 className="text-sm font-semibold text-red-200">Diagnostics Generation Failed</h4>
+                      <p className="text-xs text-white/60">{diagnosticError}</p>
+                      <button
+                        onClick={() => handleDiagnoseVideo(diagnosingVideoId || '')}
+                        className="px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition"
+                      >
+                        Retry Analysis
+                      </button>
+                    </div>
+                  ) : diagnosticResult ? (
+                    <div className="space-y-6">
+                      {/* Error Banner Category */}
+                      <div className="p-4 rounded-2xl bg-purple-500/5 border border-purple-500/10 flex items-start gap-3">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${
+                          diagnosticResult.errorType.includes('Block') ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                          diagnosticResult.errorType.includes('URL') ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                          'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }`}>
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-3xs font-mono font-bold uppercase tracking-wider text-purple-400">Error Category</span>
+                          <h4 className="text-sm font-bold text-white mt-0.5">{diagnosticResult.errorType}</h4>
+                        </div>
+                      </div>
+
+                      {/* Explanation */}
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50 font-mono">Analysis Explanation</h4>
+                        <p className="text-sm text-white/80 leading-relaxed bg-white/2 p-4 rounded-2xl border border-white/5">
+                          {diagnosticResult.explanation}
+                        </p>
+                      </div>
+
+                      {/* Solution Summary */}
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50 font-mono">Recommended Fix</h4>
+                        <p className="text-sm text-white/80 leading-relaxed bg-white/2 p-4 rounded-2xl border border-white/5">
+                          {diagnosticResult.solution}
+                        </p>
+                      </div>
+
+                      {/* Step-by-Step Action Steps */}
+                      <div className="space-y-3">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50 font-mono">Step-by-Step Instructions</h4>
+                        <div className="space-y-3 pl-1">
+                          {diagnosticResult.steps.map((step, idx) => (
+                            <div key={idx} className="flex items-start gap-3">
+                              <span className="w-5 h-5 bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold rounded-full flex items-center justify-center font-mono text-3xs shrink-0 mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <span className="text-sm text-white/70 leading-relaxed">{step}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Shortcut Actions */}
+                      <div className="border-t border-white/5 pt-5 flex flex-wrap items-center justify-end gap-3">
+                        {diagnosticResult.canSolveByCookies && (
+                          <button
+                            onClick={() => {
+                              setShowDiagnosticModal(false);
+                              setActiveTab('settings');
+                            }}
+                            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition active:scale-95 animate-bounce"
+                          >
+                            Go Configure Session Cookies
+                          </button>
+                        )}
+                        {diagnosticResult.canSolveByMock && (
+                          <button
+                            onClick={() => {
+                              setShowDiagnosticModal(false);
+                              setActiveTab('queue');
+                              setShowManualForm(true);
+                              setManualUrl('watch?v=mock_video_demo');
+                              setManualTitle('Sample Test Video');
+                              setManualDesc('Running a test using our mock downloader bypass.');
+                            }}
+                            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-semibold transition active:scale-95"
+                          >
+                            Use Mock Video for Testing
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            if (diagnosingVideoId) handleRetryVideo(diagnosingVideoId);
+                            setShowDiagnosticModal(false);
+                          }}
+                          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition active:scale-95"
+                        >
+                          Force Retry Pipeline
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
       </div>
     </div>
